@@ -1,0 +1,121 @@
+#!/bin/bash
+
+set -u
+set -e
+
+# User variables
+declare calendar=$(cal 2022 -n 3 -m --color=never)
+declare -a targetDates
+
+# Script variables
+#declare -r today=$(date "+%d/%m")
+declare -a months nDays targetDatesNames targetDatesNumbers
+declare days output=""
+
+colorize() {
+  local color="$1"
+
+  parse_target_day targetDates
+
+  #exit 1
+
+  for ((i = 0; i < ${#months[@]}; i++)); do
+      for ((j = 0; j < ${#targetDates[@]}; j++)); do
+          mon=$(echo -n "${months[$i]}" | awk '{print $1}')
+	  if [[ "$mon" == "${targetDatesNames[j]}" ]]; then
+	      sedComm="s/\<${targetDatesNumbers[j]}\>/<b><span color=\\\\\"$color\\\\\">${targetDatesNumbers[j]}<\/span><\/b>/"
+	      nDays[$i]=$(echo "${nDays[$i]}" | sed "$sedComm")
+          fi
+      done
+  done
+  
+  unset targetDates targetDatesNames targetDatesNumbers
+}
+
+# '00001115 = November 15 0000'
+parse_target_day() {
+  local formatDate temp targetDatesTemp
+  for (( i = 0; i < ${#targetDates[@]}; i++)); do
+    IFS='/' read -a temp <<< ${targetDates[$i]}
+
+    # Reverse array from mm/dd to dd/mm
+    aux=${temp[0]#0}
+    temp[0]=${temp[1]}
+    temp[1]=$(printf "%02d" "$aux")
+    targetDatesTemp[$i]=${temp[*]}
+  done
+  
+  for (( i = 0; i < ${#targetDatesTemp[@]}; i++)); do
+    formatDates+=($(echo "0000${targetDatesTemp[$i]}" | sed 's/ //g'))
+  done
+
+  for (( i = 0; i < ${#formatDates[@]}; i++)); do
+    targetDatesNames[$i]=$(date -d "${formatDates[$i]}" '+%B %d' | awk '{print $1}')
+    targetDatesNumbers[$i]=$((10#$(echo "${targetDatesTemp[$i]}" | awk ' { print $2 } ') + 0))
+  done
+
+  unset temp
+}
+
+trim_months() {
+  months=$(
+    echo -n "$1" | head -1 |
+    sed 's/^[[:space:]]*//' | rev | sed 's/   */,/2g' | rev
+  ) && IFS=',' read -a months <<<$months
+}
+
+trim_days() {
+  days=$(echo "$1" | sed -n "2p" | cut -c 1-20)
+}
+
+trim_n_days() {
+  local temp=$(echo "$1" | tail -n +3) range=22
+
+  for i in $(seq 1 $((${#months[@]}))); do
+    nDays[i - 1]=$(
+      echo "$temp" |
+      awk -v i="$i" -v j="$range" '{ print substr($0, 1+j*(i-1), 21) }'
+    )
+  done
+}
+
+format_calendar() {
+  trim_months "$calendar"
+  trim_days "$calendar"
+  trim_n_days "$calendar"
+}
+
+format_output() {
+    local line_count=$(echo "${nDays[1]}" | wc -l | awk '{ print $1 }') p j
+
+    for ((i = 0; i < line_count; i++)); do
+	if ((i == 0)); then
+	    p=$(echo "${months[0]}")
+	    j=$(echo "${months[1]}")
+	    output=$(echo -e "${output}    $p           $j")
+	    output=$(echo -e "${output}\n$days    $days")
+	    continue
+	fi
+
+	p=$(echo "${nDays[0]}" | sed -n "$i p")
+	j=$(echo "${nDays[1]}" | sed -n "$i p")
+	output=$(echo -e "${output}\n$p   $j")
+    done
+}
+
+# Format calendar style and trim each individual piece into separated variables
+format_calendar "$calendar"
+
+# Colorize days in calendar
+targetDates+=("08/11")
+
+#colorize "red"
+
+# Format output to notify-send
+format_output "$output"
+
+echo "$output"
+
+#notify-send -u low "Notifical" "\n$output"
+
+exit 0
