@@ -9,22 +9,20 @@ declare -a targetDates
 
 # Script variables
 #declare -r today=$(date "+%d/%m")
-declare -a months nDays targetDatesNames targetDatesNumbers
-declare days output=""
+declare -a months days targetDatesNames targetDatesNumbers
+declare week output=""
 
 colorize() {
   local color="$1"
 
   parse_target_day targetDates
 
-  #exit 1
-
   for ((i = 0; i < ${#months[@]}; i++)); do
       for ((j = 0; j < ${#targetDates[@]}; j++)); do
           mon=$(echo -n "${months[$i]}" | awk '{print $1}')
 	  if [[ "$mon" == "${targetDatesNames[j]}" ]]; then
 	      sedComm="s/\<${targetDatesNumbers[j]}\>/<b><span color=\\\\\"$color\\\\\">${targetDatesNumbers[j]}<\/span><\/b>/"
-	      nDays[$i]=$(echo "${nDays[$i]}" | sed "$sedComm")
+	      days[$i]=$(echo "${days[$i]}" | sed "$sedComm")
           fi
       done
   done
@@ -64,15 +62,15 @@ trim_months() {
   ) && IFS=',' read -a months <<<$months
 }
 
-trim_days() {
-  days=$(echo "$1" | sed -n "2p" | cut -c 1-20)
+trim_week() {
+  week=$(echo "$1" | sed -n "2p" | cut -c 1-20)
 }
 
 trim_n_days() {
   local temp=$(echo "$1" | tail -n +3) range=22
 
   for i in $(seq 1 $((${#months[@]}))); do
-    nDays[i - 1]=$(
+    days[i - 1]=$(
       echo "$temp" |
       awk -v i="$i" -v j="$range" '{ print substr($0, 1+j*(i-1), 21) }'
     )
@@ -81,26 +79,72 @@ trim_n_days() {
 
 format_calendar() {
   trim_months "$calendar"
-  trim_days "$calendar"
+  trim_week "$calendar"
   trim_n_days "$calendar"
 }
 
 format_output() {
-    local line_count=$(echo "${nDays[1]}" | wc -l | awk '{ print $1 }') p j
+    local line_count=$(echo "${days[0]}" | wc -l | awk '{ print $1 }')
+    local output_months output_month="" output_week="" output_days=""
+    local space_separator="    "
 
-    for ((i = 0; i < line_count; i++)); do
-	if ((i == 0)); then
-	    p=$(echo "${months[0]}")
-	    j=$(echo "${months[1]}")
-	    output=$(echo -e "${output}    $p           $j")
-	    output=$(echo -e "${output}\n$days    $days")
-	    continue
+    # Get boundaries into variable and print the first line MONTHS
+    for (( i = 0; i < ${#months[@]}; i++)); do
+	local month_length=$(echo "${months[$i]}" | xargs)
+	month_length="${#month_length}"
+
+	echo "Month_len=$month_length"
+
+	local whitespace_size=$(("${#week}"-"${#months[$i]}"))
+	echo "Whitespace_sz=$whitespace_size"
+	local temp=''
+	for (( k = 0; k < $whitespace_size; k++)); do
+	    temp+=' '
+	done
+
+	local week_length=$(echo "${#week}")
+	remaining_whitespace=$(($week_length - $month_length))
+	echo "remaining=$remaining_whitespace"
+
+	local temp2=''
+	for (( k = 0; k < $remaining_whitespace; k++)); do
+	    temp2+=' '
+	done
+
+	output_months[$i]=$(echo "$temp${months[$i]}")
+
+	#Format month section
+	if [ -z "$output_month" ];
+	then output_month="${output_months[$i]}"
+	else output_month="$output_month$space_separator${output_months[$i]}"
 	fi
 
-	p=$(echo "${nDays[0]}" | sed -n "$i p")
-	j=$(echo "${nDays[1]}" | sed -n "$i p")
-	output=$(echo -e "${output}\n$p   $j")
+	# Format week section
+	if [ -z "$output_week" ];
+	then output_week="$week"
+	else output_week="$output_week$space_separator$week"
+	fi
+	
+        # Format days
     done
+    local daysLineCount=$(($(echo "${days[0]}" | wc -l)-1))
+    for (( j = 1; j <= $daysLineCount; j++)); do
+	for (( k = 0; k < ${#months[@]}; k++)); do
+	    line=$(echo "${days[k]}" | sed -n "$j p")
+	    (( "${#line}" > 20 )) && line="${line::-1}"
+
+	    if [ $((k+1)) == ${#months[@]} ]; then
+		output_days="$(echo "$output_days$line" )"
+		continue
+	    fi
+
+	    output_days="$(echo "$output_days$line$space_separator" )"
+	    
+	done
+	output_days="$output_days\n"
+    done
+
+    echo -e "${output_month}\n${output_week}\n${output_days}" > temp
 }
 
 # Format calendar style and trim each individual piece into separated variables
@@ -112,9 +156,10 @@ targetDates+=("08/11")
 #colorize "red"
 
 # Format output to notify-send
+
 format_output "$output"
 
-echo "$output"
+#echo "$output"
 
 #notify-send -u low "Notifical" "\n$output"
 
