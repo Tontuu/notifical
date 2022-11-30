@@ -86,81 +86,74 @@ format_calendar() {
 format_output() {
     local line_count=$(echo "${days[0]}" | wc -l | awk '{ print $1 }')
     local output_months output_month="" output_week="" output_days=""
-    local space_separator="    "
+    local whitespace_separator="    "
 
     # Get boundaries into variable and print the first line MONTHS
     for (( i = 0; i < ${#months[@]}; i++)); do
-	local month_length=$(echo "${months[$i]}" | xargs)
-	month_length="${#month_length}"
 
-	echo "Month_len=$month_length"
+	# Format month section
+	local trailing_whitespace="" leading_whitespace=""
+	local month_length=$(echo "${months[$i]}" | xargs) week_length="${#week}"
 
-	local whitespace_size=$(("${#week}"-"${#months[$i]}"))
-	echo "Whitespace_sz=$whitespace_size"
-	local temp=''
-	for (( k = 0; k < $whitespace_size; k++)); do
-	    temp+=' '
+	for (( j = 0; j < "${#month_length}"/4+1; j++ )); do
+	    trailing_whitespace="$trailing_whitespace "
 	done
 
-	local week_length=$(echo "${#week}")
-	remaining_whitespace=$(($week_length - $month_length))
-	echo "remaining=$remaining_whitespace"
+	month_length="$trailing_whitespace$month_length" && month_length="${#month_length}"
+	local leading_whitespace_length=$(($week_length - $month_length))
 
-	local temp2=''
-	for (( k = 0; k < $remaining_whitespace; k++)); do
-	    temp2+=' '
+	for (( j = 0; j < leading_whitespace_length; j++ )); do
+	    leading_whitespace="$leading_whitespace "
 	done
 
-	output_months[$i]=$(echo "$temp${months[$i]}")
+	output_month="$trailing_whitespace${months[$i]}$leading_whitespace$whitespace_separator"
+	output_months+=$(echo -n "$output_month")
 
-	#Format month section
-	if [ -z "$output_month" ];
-	then output_month="${output_months[$i]}"
-	else output_month="$output_month$space_separator${output_months[$i]}"
+	if (( $i == ${#months[@]}-1 )); then
+	    local trail=${output_months##*[^[:blank:]]}
+	    output_months="${output_months%${trail}}"
 	fi
 
 	# Format week section
-	if [ -z "$output_week" ];
-	then output_week="$week"
-	else output_week="$output_week$space_separator$week"
-	fi
+	[ -z "$output_week" ] && output_week="$week" || output_week="$output_week$whitespace_separator$week"
 	
-        # Format days
+        # Format days section
     done
-    local daysLineCount=$(($(echo "${days[0]}" | wc -l)-1))
+    local daysLineCount=$(($(echo "${days[0]}" | wc -l)))
     for (( j = 1; j <= $daysLineCount; j++)); do
 	for (( k = 0; k < ${#months[@]}; k++)); do
 	    line=$(echo "${days[k]}" | sed -n "$j p")
-	    (( "${#line}" > 20 )) && line="${line::-1}"
+
+	    ! [[ "${line: -1}" == '>' ]] && (( "${#line}" > 20 )) && line="${line::-1}"
 
 	    if [ $((k+1)) == ${#months[@]} ]; then
 		output_days="$(echo "$output_days$line" )"
 		continue
 	    fi
 
-	    output_days="$(echo "$output_days$line$space_separator" )"
+	    output_days="$(echo "$output_days$line$whitespace_separator" )"
 	    
 	done
 	output_days="$output_days\n"
     done
 
-    echo -e "${output_month}\n${output_week}\n${output_days}" > temp
+
+    output=$(echo -e "${output_months}\n\n${output_week}\n${output_days}")
 }
 
 # Format calendar style and trim each individual piece into separated variables
 format_calendar "$calendar"
 
 # Colorize days in calendar
-targetDates+=("08/11")
+targetDates+=("01/01")
 
-#colorize "red"
+colorize "red"
 
 # Format output to notify-send
-
 format_output "$output"
 
 #echo "$output"
 
-#notify-send -u low "Notifical" "\n$output"
+notify-send -u low "Notifical" "$output"
 
 exit 0
