@@ -5,7 +5,7 @@ set -e
 
 # User variables
 declare calendar=$(cal 2022 -n 3 -m --color=never)
-declare -a targetDates
+declare -a targetDates=()
 
 # Script variables
 declare -r today=$(date "+%d/%m")
@@ -29,7 +29,6 @@ colorize() {
     unset targetDates targetDatesNames targetDatesNumbers
 }
 
-# '00001115 = November 15 0000'
 parse_target_day() {
     local formatDate temp targetDatesTemp 
     for (( i = 0; i < ${#targetDates[@]}; i++)); do
@@ -49,6 +48,7 @@ parse_target_day() {
 	formatDates+=($(echo "0000${targetDatesTemp[$i]}" | sed 's/ //g'))
     done
 
+    # '00001115 = November 15 0000'
     for (( i = 0; i < ${#formatDates[@]}; i++)); do
 	targetDatesNames[$i]=$(date -d "${formatDates[$i]}" '+%B %d' | awk '{print $1}')
 	targetDatesNumbers[$i]=$((10#$(echo "${targetDatesTemp[$i]}" | awk ' { print $2 } ') + 0))
@@ -148,15 +148,13 @@ format_calendar "$calendar"
 
 # Colorize days in calendar
 targetDates+=("$today yellow")
-targetDates+=("01/01 red")
-targetDates+=("15/11 red")
+# targetDates+=("01/01 red")
+# targetDates+=("15/11 red")
 
-colorize
+(( ${#targetDates[@]} )) && colorize
 
 # Format output to notify-send
 format_output "$output"
-
-echo "$output"
 
 notify-send -u low "Notifical" "$output"
 
