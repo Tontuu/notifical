@@ -3,18 +3,46 @@
 set -u
 set -e
 
-# User variables
-declare calendar=$(cal 2022 -n 3 -m --color=never)
-declare -a targetDates=()
-
 # Script variables
 declare -r today=$(date "+%d/%m")
 declare -a months days targetDatesNames targetDatesNumbers
 declare week output=""
+declare dateRegex="^([1-9]|0[1-9]|[1-2][0-9]|3[0-1])[\/](0[1-9]|[1-2][0-2]|[1-9] )"
+
+
+# User variables
+declare calendar=$(cal 2022 -n 3 -m --color=never)
+declare -a targetDates=()
+
+
+# Miscellanous variables
+RED='\033[0;31m'
+YEL='\033[0;33m'
+NC='\033[0m'
+
+usage="\
+${RED}Usage${NC}:
+  ./$(basename "$0") [option...] [dates...]
+
+${RED}Options${NC}:
+   -n, --months       show number of months from current the month to a range of 1 to 3
+
+   -i, --input-file   take DATE PATTERNS from file and highlight them on calendar"
+
+datesExample="\
+   Example: ./$(basename "$0") ${YEL}\"06/11 red\"${NC}"
+
+listOfColors="\
+   ${RED}List of colors${NC}:
+      black, white, gray, silver, maroon,
+      red, purple, fushsia, green, lime,
+      olive, yellow, navy, blue, teal, aqua."
+
+moreInfo="\
+Try \`$(basename "$0") -h\` for more information."
 
 colorize() {
-
-    parse_target_day
+    parseTargetDay
 
     for ((i = 0; i < ${#months[@]}; i++)); do
 	for ((j = 0; j < ${#targetDates[@]}; j++)); do
@@ -29,7 +57,7 @@ colorize() {
     unset targetDates targetDatesNames targetDatesNumbers
 }
 
-parse_target_day() {
+parseTargetDay() {
     local formatDate temp targetDatesTemp 
     for (( i = 0; i < ${#targetDates[@]}; i++)); do
 	local date=$(echo "${targetDates[$i]}" | awk '{print $1}')
@@ -57,18 +85,18 @@ parse_target_day() {
     unset temp
 }
 
-trim_months() {
+trimMonths() {
     months=$(
 	echo -n "$1" | head -1 |
 	    sed 's/^[[:space:]]*//' | rev | sed 's/   */,/2g' | rev
 	  ) && IFS=',' read -a months <<<$months
 }
 
-trim_week() {
+trimWeek() {
     week=$(echo "$1" | sed -n "2p" | cut -c 1-20)
 }
 
-trim_n_days() {
+trimNdays() {
     local temp=$(echo "$1" | tail -n +3) range=22
 
     for i in $(seq 1 $((${#months[@]}))); do
@@ -79,48 +107,47 @@ trim_n_days() {
     done
 }
 
-format_calendar() {
-    trim_months "$calendar"
-    trim_week "$calendar"
-    trim_n_days "$calendar"
+formatCalendar() {
+    trimMonths "$calendar"
+    trimWeek "$calendar"
+    trimNdays "$calendar"
 }
 
-format_output() {
-    local line_count=$(echo "${days[0]}" | wc -l | awk '{ print $1 }')
-    local output_months output_month="" output_week="" output_days=""
-    local whitespace_separator="    "
+formatOutput() {
+    local lineCount=$(echo "${days[0]}" | wc -l | awk '{ print $1 }')
+    local outputMonths outputMonth="" outputWeek="" outputDays=""
+    local whitespaceSeparator="    "
 
     # Get boundaries into variable and print the first line MONTHS
     for (( i = 0; i < ${#months[@]}; i++)); do
-
 	# Format month section
-	local trailing_whitespace="" leading_whitespace=""
-	local month_length=$(echo "${months[$i]}" | xargs) week_length="${#week}"
+	local trailingWhitespace="" leadingWhitespace=""
+	local monthLength=$(echo "${months[$i]}" | xargs) weekLength="${#week}"
 
-	for (( j = 0; j < "${#month_length}"/4+1; j++ )); do
-	    trailing_whitespace="$trailing_whitespace "
+	for (( j = 0; j < "${#monthLength}"/4+1; j++ )); do
+	    trailingWhitespace="$trailingWhitespace "
 	done
 
-	month_length="$trailing_whitespace$month_length" && month_length="${#month_length}"
-	local leading_whitespace_length=$(($week_length - $month_length))
+	monthLength="$trailingWhitespace$monthLength" && monthLength="${#monthLength}"
+	local leadingWhitespaceLen=$(($weekLength - $monthLength))
 
-	for (( j = 0; j < leading_whitespace_length; j++ )); do
-	    leading_whitespace="$leading_whitespace "
+	for (( j = 0; j < leadingWhitespaceLen; j++ )); do
+	    leadingWhitespace="$leadingWhitespace "
 	done
 
-	output_month="$trailing_whitespace${months[$i]}$leading_whitespace$whitespace_separator"
-	output_months+=$(echo -n "$output_month")
+	outputMonth="$trailingWhitespace${months[$i]}$leadingWhitespace$whitespaceSeparator"
+	outputMonths+=$(echo -n "$outputMonth")
 
 	if (( $i == ${#months[@]}-1 )); then
-	    local trail=${output_months##*[^[:blank:]]}
-	    output_months="${output_months%${trail}}"
+	    local trail=${outputMonths##*[^[:blank:]]}
+	    outputMonths="${outputMonths%${trail}}"
 	fi
 
 	# Format week section
-	[ -z "$output_week" ] && output_week="$week" || output_week="$output_week$whitespace_separator$week"
-	
-	# Format days section
+	[ -z "$outputWeek" ] && outputWeek="$week" || outputWeek="$outputWeek$whitespaceSeparator$week"
     done
+
+    # Format days section
     local daysLineCount=$(($(echo "${days[0]}" | wc -l)))
     for (( j = 1; j <= $daysLineCount; j++)); do
 	for (( k = 0; k < ${#months[@]}; k++)); do
@@ -129,33 +156,140 @@ format_output() {
 	    ! [[ "${line: -1}" == '>' ]] && (( "${#line}" > 20 )) && line="${line::-1}"
 
 	    if [ $((k+1)) == ${#months[@]} ]; then
-		output_days="$(echo "$output_days$line" )"
+		outputDays="$(echo "$outputDays$line" )"
 		continue
 	    fi
 
-	    output_days="$(echo "$output_days$line$whitespace_separator" )"
+	    outputDays="$(echo "$outputDays$line$whitespaceSeparator" )"
 	    
 	done
-	output_days="$output_days\n"
+	outputDays="$outputDays\n"
+    done
+    output=$(echo -e "${outputMonths}\n\n${outputWeek}\n${outputDays}")
+}
+
+
+parseInputFile() {
+    local inputFile="$1"
+
+    local inputFileUsage=$(echo -e "$usage" | grep "input-file") && inputFileUsage="   ${RED}Usage${NC}:\n   $inputFileUsage"
+    if ! [[ -f $inputFile ]]; then
+        printf "${RED}ERROR${NC}: '%s' is not a valid file\n" "$inputFile"
+	echo -e "$inputFileUsage"
+	exit 1
+    fi
+
+    local fileDates=$(cat $inputFile | grep -E -o --color=never "$dateRegex" | sed -e "s/$/ red/")
+    IFS=$'\n' read -r -d '' -a targetDates <<< $fileDates
+}
+
+parseMonthNumbers() {
+    local number="$1"
+    local numberUsage=$(echo -e "$usage" | grep "months") && numberUsage="   ${RED}Usage${NC}:\n   $numberUsage"
+
+    if ! [[ $number =~ ^[0-9]+$ ]]; then
+        printf "${RED}ERROR${NC}: '%s' is not a number\n" "$number"
+	echo -e "$numberUsage"
+	exit 1
+    fi
+
+    if [ "$number" -lt 1 ] || [ "$number" -gt 3 ]; then
+        printf "${RED}ERROR${NC}: '%s' is not between 1-3\n" "$number"
+	echo -e "$numberUsage"
+	exit 1
+    fi
+
+    calendar=$(cal 2022 -n $number -m --color=never)
+}
+
+parseArgumentDate() {
+    local arg="$1"
+
+    local argRegex="${dateRegex}( +[a-zA-Z]+) *"
+
+    if [[ $arg =~ $argRegex ]]; then
+	isColor "$(echo "$arg" | awk '{ print $2 }')" && targetDates+=("$arg") || argumentCrash "color"
+	   
+    else
+	argumentCrash "arg"
+    fi
+}
+
+isColor() {
+    matchColor="$1"
+    declare -a colors=(
+	black white gray silver maroon
+	red purple fushsia green lime
+	olive yellow navy blue teal aqua)
+
+    for (( i = 0; i < ${#colors[@]}; i++ )); do
+	if [ "$matchColor" == "${colors[i]}" ]; then
+	   return 0
+	fi
     done
 
+    return 1
+}
 
-    output=$(echo -e "${output_months}\n\n${output_week}\n${output_days}")
+argumentCrash() {
+    printf "${RED}ERROR${NC}: "
+
+    case "$1" in
+	color) echo -e "Notifical does not support this color." && echo -e "$listOfColors" ;;
+	arg)   echo -e "Invalid argument\n $datesExample"                                    ;;
+	i)     echo -e "Expected input file." && grep="--input-file"                         ;;
+	n)     echo -e "Expected a range of months" && grep="--months"                       ;;
+	*)                                                                                   ;;
+
+    esac
+
+    if ! [[ -z "${grep+x}" ]]; then
+       echo -e "$usage" | grep -E "Usage|$grep" | awk '{print "   "$0}'
+    fi
+
+    echo -e "\n$moreInfo"
+
+    exit 1
 }
 
 # Format calendar style and trim each individual piece into separated variables
-format_calendar "$calendar"
+#formatCalendar "$calendar"
+
+# Parse arguments
+while [[ "$#" -gt 0 ]]; do
+
+    if ! [[ -z "$@" ]]; then
+	if [[ $1 == "-h" || $1 == "--help" ]]; then echo -e "Notify calendar and day reminder\n\n$usage" && shift
+
+	elif [[ $1 == "-i" || $1 == "--input-file" ]]; then
+	    # If argument value was not provided, exit.
+	    [[ -z "${2+x}" ]] && argumentCrash "i" || parseInputFile "$2" && shift
+	    
+	elif [[ $1 == "-n" || $1 == "--months" ]]; then
+	    [[ -z "${2+x}" ]] && argumentCrash "n" || parseMonthNumbers "$2" && shift
+
+	elif [[ $1 =~ ${dateRegex} ]]; then
+	    parseArgumentDate "$1"
+	    #targetDates+=("$1")
+	fi
+    fi
+    shift
+done
+
+targetDates+=("01/01 red")
+targetDates+=("15/11 red")
+
 
 # Colorize days in calendar
-targetDates+=("$today yellow")
-# targetDates+=("01/01 red")
-# targetDates+=("15/11 red")
+#targetDates+=("$today yellow")
 
-(( ${#targetDates[@]} )) && colorize
+#(( ${#targetDates[@]} )) && colorize
 
 # Format output to notify-send
-format_output "$output"
+#formatOutput "$output"
 
-notify-send -u low "Notifical" "$output"
+#notify-send -u low "Notifical" "$output"
+
+#echo -e "$usage"
 
 exit 0
