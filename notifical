@@ -5,14 +5,15 @@ set -e
 
 # Script variables
 declare -r today=$(date "+%d/%m")
-declare -a months days targetDatesNames targetDatesNumbers
+declare -a months days targetMonths targetDays
 declare week output=""
-declare dateRegex="^([1-9]|0[1-9]|[1-2][0-9]|3[0-1])[\/](0[1-9]|[1-2][0-2]|[1-9] )"
-
+declare dateRegex="([1-9]|0[1-9]|[1-2][0-9]|3[0-1])[\/](0[1-9]|[1-2][0-2]|[1-9])"
+declare argRegex="${dateRegex}( +[a-zA-Z]+) *"
 
 # User variables
 declare calendar=$(cal 2022 -n 3 -m --color=never)
 declare -a targetDates=()
+declare -r defaultColor="red"
 
 
 # Miscellanous variables
@@ -26,19 +27,19 @@ ${RED}Usage${NC}:
 
 ${RED}Options${NC}:
    -n, --months       show number of months from current the month to a range of 1 to 3
-
-   -i, --input-file   take DATE PATTERNS from file and highlight them on calendar"
+   -i, --input-file   take DATE PATTERNS from file and highlight them on calendar
+   -l, --list-colors  print list of available colors for highlighting"
 
 datesExample="\
-   Example: ./$(basename "$0") ${YEL}\"06/11 red\"${NC}"
+   Example: ./$(basename "$0") ${YEL}\"dd/mm color\"${NC}"
 
-listOfColors="\
-   ${RED}List of colors${NC}:
-      black, white, gray, silver, maroon,
-      red, purple, fushsia, green, lime,
-      olive, yellow, navy, blue, teal, aqua."
+listColors="\
+${RED}List of colors${NC}:
+    black, white, gray, silver, lime
+    red, purple, green, maroon, yellow
+    olive, navy, blue, teal, aqua."
 
-moreInfo="\
+moreInfo="
 Try \`$(basename "$0") -h\` for more information."
 
 colorize() {
@@ -47,14 +48,15 @@ colorize() {
     for ((i = 0; i < ${#months[@]}; i++)); do
 	for ((j = 0; j < ${#targetDates[@]}; j++)); do
 	    mon=$(echo -n "${months[$i]}" | awk '{print $1}')
-	    if [[ "$mon" == "${targetDatesNames[j]}" ]]; then
-		sedComm="s/\<${targetDatesNumbers[j]}\>/<b><span color=\\\\\"${color[j]}\\\\\">${targetDatesNumbers[j]}<\/span><\/b>/"
+	    if [[ "$mon" == "${targetMonths[j]}" ]]; then
+		sedComm="s/\b${targetDays[j]}/<b><span color=\"${color[j]}\">${targetDays[j]}<\/span><\/b>/"
+		#echo "${days[i]}" | sed "s/\<${targetDays[j]}\>/<b><span color=\\\\\"${color}\\\\\">${targetDays[j]}<\/span><\/b>/"
 		days[$i]=$(echo "${days[$i]}" | sed "$sedComm")
 	    fi
 	done
     done
     
-    unset targetDates targetDatesNames targetDatesNumbers
+    unset targetDates targetMonths targetDays
 }
 
 parseTargetDay() {
@@ -71,6 +73,7 @@ parseTargetDay() {
 	temp[1]=$(printf "%02d" "$aux")
 	targetDatesTemp[$i]=${temp[*]}
     done
+
     
     for (( i = 0; i < ${#targetDatesTemp[@]}; i++)); do
 	formatDates+=($(echo "0000${targetDatesTemp[$i]}" | sed 's/ //g'))
@@ -78,8 +81,8 @@ parseTargetDay() {
 
     # '00001115 = November 15 0000'
     for (( i = 0; i < ${#formatDates[@]}; i++)); do
-	targetDatesNames[$i]=$(date -d "${formatDates[$i]}" '+%B %d' | awk '{print $1}')
-	targetDatesNumbers[$i]=$((10#$(echo "${targetDatesTemp[$i]}" | awk ' { print $2 } ') + 0))
+	targetMonths[$i]=$(date -d "${formatDates[$i]}" '+%B %d' | awk '{print $1}')
+	targetDays[$i]=$((10#$(echo "${targetDatesTemp[$i]}" | awk ' { print $2 } ') + 0))
     done
 
     unset temp
@@ -169,20 +172,6 @@ formatOutput() {
 }
 
 
-parseInputFile() {
-    local inputFile="$1"
-
-    local inputFileUsage=$(echo -e "$usage" | grep "input-file") && inputFileUsage="   ${RED}Usage${NC}:\n   $inputFileUsage"
-    if ! [[ -f $inputFile ]]; then
-        printf "${RED}ERROR${NC}: '%s' is not a valid file\n" "$inputFile"
-	echo -e "$inputFileUsage"
-	exit 1
-    fi
-
-    local fileDates=$(cat $inputFile | grep -E -o --color=never "$dateRegex" | sed -e "s/$/ red/")
-    IFS=$'\n' read -r -d '' -a targetDates <<< $fileDates
-}
-
 parseMonthNumbers() {
     local number="$1"
     local numberUsage=$(echo -e "$usage" | grep "months") && numberUsage="   ${RED}Usage${NC}:\n   $numberUsage"
@@ -205,91 +194,128 @@ parseMonthNumbers() {
 parseArgumentDate() {
     local arg="$1"
 
-    local argRegex="${dateRegex}( +[a-zA-Z]+) *"
-
-    if [[ $arg =~ $argRegex ]]; then
-	isColor "$(echo "$arg" | awk '{ print $2 }')" && targetDates+=("$arg") || argumentCrash "color"
-	   
-    else
-	argumentCrash "arg"
+    if ! [[ $arg =~ $argRegex ]]; then
+	argErr "a" "$arg"
+    elif ! isColor "$(echo "$arg" | awk '{ print $2 }')"; then
+        argErr "color"
     fi
+
+    targetDates+=("$arg")
+}
+
+parseInputFile() {
+    local inputFile="$1"
+    local fileColor
+
+    if isSet "$2"; then
+	isColor "$2" && fileColor="$2" || argErr "c" "$2"
+    else
+	fileColor="$defaultColor";
+    fi
+
+    ! [[ -f $inputFile ]] && argErr "f" "$inputFile"
+
+    local fileDates=$(cat $inputFile | grep -E -o --color=never "$dateRegex" | sed -e "s/$/ $fileColor/")
+
+    readarray -t targetDates <<< "$fileDates"
+
+    return 0
+}
+
+isSet() {
+    ! [[ -z "$1" ]]
 }
 
 isColor() {
-    matchColor="$1"
-    declare -a colors=(
+    matchColor=$(echo "$1" | xargs)
+
+    declare -a availableColors=(
 	black white gray silver maroon
 	red purple fushsia green lime
 	olive yellow navy blue teal aqua)
 
-    for (( i = 0; i < ${#colors[@]}; i++ )); do
-	if [ "$matchColor" == "${colors[i]}" ]; then
-	   return 0
-	fi
+    for (( i = 0; i < ${#availableColors[@]}; i++ )); do
+	[ "$matchColor" == "${availableColors[i]}" ] && return 0
     done
 
     return 1
 }
 
-argumentCrash() {
+isFile() {
+    [[ -f "$1" ]]
+}
+
+argErr() {
+    errCode="$1"
+    errStr=$(echo "$2" | xargs)
+
     printf "${RED}ERROR${NC}: "
 
-    case "$1" in
-	color) echo -e "Notifical does not support this color." && echo -e "$listOfColors" ;;
-	arg)   echo -e "Invalid argument\n $datesExample"                                    ;;
-	i)     echo -e "Expected input file." && grep="--input-file"                         ;;
-	n)     echo -e "Expected a range of months" && grep="--months"                       ;;
-	*)                                                                                   ;;
-
+    case "$errCode" in
+	a)     echo -e "\`$errStr\` Invalid date argument\n $datesExample"      ;;
+	u)     echo -e "\`$errStr\` Unexpected argument\n $datesExample"        ;;
+	c)     echo -e "\`$errStr\` Is not a supported color.\n $listColors"    ;;
+	f)     echo -e "\`$errStr\` Is not a valid file" && grep="--input-file" ;;
+	i)     echo -e "Expected input file."       && grep="--input-file"      ;;
+	n)     echo -e "Expected a range of months" && grep="--months"          ;;
     esac
 
-    if ! [[ -z "${grep+x}" ]]; then
+    ! [[ -z "${grep+x}" ]] &&
        echo -e "$usage" | grep -E "Usage|$grep" | awk '{print "   "$0}'
-    fi
 
-    echo -e "\n$moreInfo"
+    echo "$moreInfo"
 
     exit 1
 }
 
 # Format calendar style and trim each individual piece into separated variables
-#formatCalendar "$calendar"
+formatCalendar "$calendar"
 
 # Parse arguments
+set +u
 while [[ "$#" -gt 0 ]]; do
-
     if ! [[ -z "$@" ]]; then
-	if [[ $1 == "-h" || $1 == "--help" ]]; then echo -e "Notify calendar and day reminder\n\n$usage" && shift
-
-	elif [[ $1 == "-i" || $1 == "--input-file" ]]; then
-	    # If argument value was not provided, exit.
-	    [[ -z "${2+x}" ]] && argumentCrash "i" || parseInputFile "$2" && shift
-	    
+	if [[ $1 == "-h" || $1 == "--help" ]]; then
+	    echo -e "Notify calendar and day reminder\n\n$usage" && exit 0
 	elif [[ $1 == "-n" || $1 == "--months" ]]; then
-	    [[ -z "${2+x}" ]] && argumentCrash "n" || parseMonthNumbers "$2" && shift
+	    ! isSet "$2" && argErr "n" || parseMonthNumbers "$2" && shift
 
+	elif [[ $1 == "-l" || $1 == "--list-colors" ]]; then
+	    echo -e "$listColors" && exit 0
+
+	elif [[ "$1" == "-i" || $1 == "--input-file" ]]; then
+
+	    isSet "$2" || argErr "i" && isFile "$2" || argErr "f" "$2"
+	    #if [[ isSet "$3" && [[ $3 =~ (^ *[a-zA-Z]+ *$) ]]  || argErr "c" "$3" && isColor "$3" || arg "i" ]]
+
+
+	    echo "$1 ::: $2 ::: $3"
+	    
+	    exit 1
+	    parseInputFile "$2" "$3"
+	    isSet "$3" && shift
+	    shift
+	    
 	elif [[ $1 =~ ${dateRegex} ]]; then
 	    parseArgumentDate "$1"
-	    #targetDates+=("$1")
+	else
+	    argErr "u" "$1"
 	fi
     fi
     shift
 done
+set -u
 
-targetDates+=("01/01 red")
-targetDates+=("15/11 red")
-
+exit 1
 
 # Colorize days in calendar
-#targetDates+=("$today yellow")
+targetDates+=("$today yellow")
 
-#(( ${#targetDates[@]} )) && colorize
+(( ${#targetDates[@]} )) && colorize
 
 # Format output to notify-send
-#formatOutput "$output"
+formatOutput "$output"
 
-#notify-send -u low "Notifical" "$output"
-
-#echo -e "$usage"
+notify-send -u low "Notifical" "$output"
 
 exit 0
