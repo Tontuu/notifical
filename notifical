@@ -194,22 +194,34 @@ parseMonthNumbers() {
 parseArgumentDate() {
     local arg="$1"
 
-    if ! [[ $arg =~ $argRegex ]]; then
-	argErr "a" "$arg"
-    elif ! isColor "$(echo "$arg" | awk '{ print $2 }')"; then
-        argErr "color"
-    fi
+    if ! isColor "$arg"; then
+	if [[ $arg =~ $argRegex ]]; then
+	    local argColor=$(echo "$arg" | awk '{ print $2 }')
+	    if isColor "$argColor"; then
+                targetDates+=("$arg")
+	    else
+	        argErr "c" "$argColor"
+	    fi
+	else
+	    # Check if arg has only 1 word
+	    local tempRegex="(^ +[^ ]+$)|(^[^ ]+$)|(^[^ ]+ +$)|(^ +[^ ]+ +$)"
 
-    targetDates+=("$arg")
+            [[ $arg =~ $tempRegex ]] && argErr "c" "$arg" || argErr "a" "$arg"
+	fi
+    fi
 }
 
 parseInputFile() {
-    local inputFile="$1"
-    local fileColor
+    local inputFile="$1" 
 
     if isSet "$2"; then
-	isColor "$2" && fileColor="$2" || argErr "c" "$2"
+	if isColor "$2"; then
+           fileColor="$2"  # || argErr "c" "$2"
+	else
+	   parseArgumentDate "$2"
+	fi
     else
+	echo "color is not set"
 	fileColor="$defaultColor";
     fi
 
@@ -284,16 +296,19 @@ while [[ "$#" -gt 0 ]]; do
 	    echo -e "$listColors" && exit 0
 
 	elif [[ "$1" == "-i" || $1 == "--input-file" ]]; then
+	    if isSet "$2"; then
+                isFile "$2" || argErr "f" "$2"
+		if isSet "$3"; then
+		    parseInputFile "$2" "$3"
+		    shift
+		else
+		    parseInputFile "$2"
+		fi
+	    else
+		argErr "i" "$2"
+	    fi
 
-	    isSet "$2" || argErr "i" && isFile "$2" || argErr "f" "$2"
-	    #if [[ isSet "$3" && [[ $3 =~ (^ *[a-zA-Z]+ *$) ]]  || argErr "c" "$3" && isColor "$3" || arg "i" ]]
-
-
-	    echo "$1 ::: $2 ::: $3"
-	    
-	    exit 1
-	    parseInputFile "$2" "$3"
-	    isSet "$3" && shift
+	    # TODO: Positional arguments
 	    shift
 	    
 	elif [[ $1 =~ ${dateRegex} ]]; then
@@ -306,7 +321,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 set -u
 
-exit 1
+exit 25
 
 # Colorize days in calendar
 targetDates+=("$today yellow")
