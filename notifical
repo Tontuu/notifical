@@ -8,7 +8,6 @@ declare -r today=$(date "+%d/%m")
 declare -a months days targetMonths targetDays
 declare week output=""
 declare dateRegex="([1-9]|0[1-9]|[1-2][0-9]|3[0-1])[\/](0[1-9]|[1-2][0-2]|[1-9])"
-declare argRegex="${dateRegex}( +[a-zA-Z]+) *"
 
 # User variables
 declare calendar=$(cal 2022 -n 3 -m --color=never)
@@ -43,6 +42,10 @@ moreInfo="
 Try \`$(basename "$0") -h\` for more information."
 
 colorize() {
+    echo -e "\n--------------\n"
+    echo "- colorize()"
+    echo "- targetDates=(${targetDates[@]})"
+    #exit 22
     parseTargetDay
 
     for ((i = 0; i < ${#months[@]}; i++)); do
@@ -194,49 +197,68 @@ parseMonthNumbers() {
 }
 
 parseArgumentDate() {
+    local argRegex="${dateRegex}( +[a-zA-Z]+) *"
+    local oneWordRegex="(^ +[^ ]+$)|(^[^ ]+$)|(^[^ ]+ +$)|(^ +[^ ]+ +$)"
+
     echo "- parseArgumentDate()"
 
     local arg="$1"
+    
+    # If arg matches regex "mm/xx color"
+    if [[ $arg =~ $argRegex ]]; then
+	echo "- $arg Matches regex [mm/xx color]"
+	local argColor=$(echo "$arg" | awk '{ print $2 }')
 
-    if ! isColor "$arg"; then
-	echo "- \$arg={${arg}} IS NOT A COLOR"
-	exit 22
-	if [[ $arg =~ $argRegex ]]; then
-	    local argColor=$(echo "$arg" | awk '{ print $2 }')
-	    if isColor "$argColor"; then
-                targetDates+=("$arg")
-	    else
-	        argErr "c" "$argColor"
-	    fi
+	# Check if arg has a valid color
+	if isColor "$argColor"; then
+	    echo "- $argColor is a valid color"
+	    echo "- adding [$arg] to targetDates"
+	    targetDates+=("$arg")
 	else
-	    # Check if arg has only 1 word
-	    local tempRegex="(^ +[^ ]+$)|(^[^ ]+$)|(^[^ ]+ +$)|(^ +[^ ]+ +$)"
-
-            [[ $arg =~ $tempRegex ]] && argErr "c" "$arg" || argErr "a" "$arg"
+	    argErr "c" "$argColor"
 	fi
+
+    elif [[ $arg =~ $oneWordRegex ]]; then
+	# Check if arg has only 1 word
+	echo "- [$arg] is one word"
+	argErr "c" "$arg"
+    else
+	echo "- [$arg] DOESN'T match regex [mm/xx color]"
+	argErr "a" "$arg"
     fi
 }
 
 parseInputFile() {
-    local inputFile="$1" 
+    local fileColor="$defaultColor";
+    local inputFile="$1"
+    echo "- Checking if [$1] is a valid file"
+    ! isFile "$1" && argErr "f" "$inputFile"
+    echo -e "\n----------------------------\n"
 
     if isSet "$2"; then
 	if isColor "$2"; then
+	   echo "- [$2] is a valid color after input_file"
            fileColor="$2"  # || argErr "c" "$2"
+	   echo "- [$2] added to [\$fileColor]"
+           echo -e "\n----------------------------\n"
+	   
 	else
-	   echo "- \$2{$2} IS NOT A COLOR"
-	   echo "- HERE, IS AN ARGUMENT"
+	   echo "- [$2] is an argument"
 	   parseArgumentDate "$2"
 	fi
-    else
-	fileColor="$defaultColor";
     fi
+
+    echo "- Now is parsing all file dates and adding default color or given color"
+    echo "- [\$targetDates=(${targetDates[@]})]"
 
     ! [[ -f $inputFile ]] && argErr "f" "$inputFile"
 
     local fileDates=$(cat $inputFile | grep -E -o --color=never "$dateRegex" | sed -e "s/$/ $fileColor/")
 
-    readarray -t targetDates <<< "$fileDates"
+    
+    readarray -t -O "${#targetDates[@]}" targetDates <<< "$fileDates"
+
+    echo "- [\$targetDates=(${targetDates[@]})]"
 
     return 0
 }
