@@ -177,12 +177,14 @@ parseMonthNumbers() {
     local numberUsage=$(echo -e "$usage" | grep "months") && numberUsage="   ${RED}Usage${NC}:\n   $numberUsage"
 
     if ! [[ $number =~ ^[0-9]+$ ]]; then
+	# TODO: Send to argErr
         printf "${RED}ERROR${NC}: '%s' is not a number\n" "$number"
 	echo -e "$numberUsage"
 	exit 1
     fi
 
     if [ "$number" -lt 1 ] || [ "$number" -gt 3 ]; then
+	# TODO: Send to argErr
         printf "${RED}ERROR${NC}: '%s' is not between 1-3\n" "$number"
 	echo -e "$numberUsage"
 	exit 1
@@ -192,9 +194,13 @@ parseMonthNumbers() {
 }
 
 parseArgumentDate() {
+    echo "- parseArgumentDate()"
+
     local arg="$1"
 
     if ! isColor "$arg"; then
+	echo "- \$arg={${arg}} IS NOT A COLOR"
+	exit 22
 	if [[ $arg =~ $argRegex ]]; then
 	    local argColor=$(echo "$arg" | awk '{ print $2 }')
 	    if isColor "$argColor"; then
@@ -218,10 +224,11 @@ parseInputFile() {
 	if isColor "$2"; then
            fileColor="$2"  # || argErr "c" "$2"
 	else
+	   echo "- \$2{$2} IS NOT A COLOR"
+	   echo "- HERE, IS AN ARGUMENT"
 	   parseArgumentDate "$2"
 	fi
     else
-	echo "color is not set"
 	fileColor="$defaultColor";
     fi
 
@@ -321,7 +328,8 @@ while [[ "$#" -gt 0 ]]; do
 done
 set -u
 
-exit 25
+# Format calendar
+formatCalendar "$calendar"
 
 # Colorize days in calendar
 targetDates+=("$today yellow")
