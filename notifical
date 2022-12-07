@@ -13,6 +13,7 @@ declare dateRegex="([1-9]|0[1-9]|[1-2][0-9]|3[0-1])[\/](0[1-9]|[1-2][0-2]|[1-9])
 
 # User variables
 declare calendar=$(cal 2022 -n 3 -m --color=never)
+declare monthRange
 declare -a targetDates=()
 declare -r defaultColor="red"
 
@@ -48,10 +49,10 @@ colorize() {
 
     for ((i = 0; i < ${#months[@]}; i++)); do
 	for ((j = 0; j < ${#targetDates[@]}; j++)); do
-	    mon=$(echo -n "${months[$i]}" | awk '{print $1}')
+	    mon=$(printf "${months[$i]}" | awk '{print $1}')
 	    if [[ "$mon" == "${targetMonths[j]}" ]]; then
 		sedComm="s/\b${targetDays[j]}/<b><span color=\"${color[j]}\">${targetDays[j]}<\/span><\/b>/"
-		days[$i]=$(echo "${days[$i]}" | sed "$sedComm")
+		days[$i]=$(printf "${days[$i]}" | sed "$sedComm")
 	    fi
 	done
     done
@@ -156,15 +157,15 @@ formatOutput() {
 	for (( k = 0; k < ${#months[@]}; k++)); do
 	    line=$(echo "${days[k]}" | sed -n "$j p")
 
-	    ! [[ "${line: -1}" == '>' ]] && (( "${#line}" > 20 )) && line="${line::-1}"
+	    # If days line has whitespaces leading and monthRange is greater than 1
+	    # chop line by one to fix on format.
+	    ! [[ "${line: -1}" == '>' ]] && (( "${#line}" > 20 )) && (( $monthRange > 1 )) &&line="${line::-1}"
 
 	    if [ $((k+1)) == ${#months[@]} ]; then
 		outputDays="$(echo "$outputDays$line" )"
 		continue
 	    fi
-
 	    outputDays="$(echo "$outputDays$line$whitespaceSeparator" )"
-	    
 	done
 	outputDays="$outputDays\n"
     done
@@ -172,17 +173,17 @@ formatOutput() {
 }
 
 
-parseMonthNumbers() {
-    local number="$1"
-    if ! [[ "$number" =~ ^[0-9]+$ ]]; then
-	argErr "x" "$number"
+parseMonthRange() {
+    monthRange="$1"
+    if ! [[ "$monthRange" =~ ^[0-9]+$ ]]; then
+	argErr "x" "$monthRange"
     fi
 
-    if [ "$number" -lt 1 ] || [ "$number" -gt 3 ]; then
-	argErr "m" "$number"
+    if [ "$monthRange" -lt 1 ] || [ "$monthRange" -gt 3 ]; then
+	argErr "m" "$monthRange"
     fi
 
-    calendar=$(cal 2022 -n $number -m --color=never)
+    calendar=$(cal 2022 -n $monthRange -m --color=never)
 }
 
 parseArgumentDate() {
@@ -291,7 +292,7 @@ while [[ "$#" -gt 0 ]]; do
 	if [[ $1 == "-h" || $1 == "--help" ]]; then
 	    echo -e "Notify calendar and day reminder\n\n$usage" && exit 0
 	elif [[ $1 == "-n" || $1 == "--months" ]]; then
-	    ! isSet "$2" && argErr "n" || parseMonthNumbers "$2" && shift
+	    ! isSet "$2" && argErr "n" || parseMonthRange "$2" && shift
 
 	elif [[ $1 == "-l" || $1 == "--list-colors" ]]; then
 	    echo -e "$listColors" && exit 0
