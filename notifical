@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# TODO: Replace all echos with printfs
+
 set -u
 set -e
 
@@ -42,10 +44,6 @@ moreInfo="
 Try \`$(basename "$0") -h\` for more information."
 
 colorize() {
-    echo -e "\n--------------\n"
-    echo "- colorize()"
-    echo "- targetDates=(${targetDates[@]})"
-    #exit 22
     parseTargetDay
 
     for ((i = 0; i < ${#months[@]}; i++)); do
@@ -53,7 +51,6 @@ colorize() {
 	    mon=$(echo -n "${months[$i]}" | awk '{print $1}')
 	    if [[ "$mon" == "${targetMonths[j]}" ]]; then
 		sedComm="s/\b${targetDays[j]}/<b><span color=\"${color[j]}\">${targetDays[j]}<\/span><\/b>/"
-		#echo "${days[i]}" | sed "s/\<${targetDays[j]}\>/<b><span color=\\\\\"${color}\\\\\">${targetDays[j]}<\/span><\/b>/"
 		days[$i]=$(echo "${days[$i]}" | sed "$sedComm")
 	    fi
 	done
@@ -177,20 +174,12 @@ formatOutput() {
 
 parseMonthNumbers() {
     local number="$1"
-    local numberUsage=$(echo -e "$usage" | grep "months") && numberUsage="   ${RED}Usage${NC}:\n   $numberUsage"
-
-    if ! [[ $number =~ ^[0-9]+$ ]]; then
-	# TODO: Send to argErr
-        printf "${RED}ERROR${NC}: '%s' is not a number\n" "$number"
-	echo -e "$numberUsage"
-	exit 1
+    if ! [[ "$number" =~ ^[0-9]+$ ]]; then
+	argErr "x" "$number"
     fi
 
     if [ "$number" -lt 1 ] || [ "$number" -gt 3 ]; then
-	# TODO: Send to argErr
-        printf "${RED}ERROR${NC}: '%s' is not between 1-3\n" "$number"
-	echo -e "$numberUsage"
-	exit 1
+	argErr "m" "$number"
     fi
 
     calendar=$(cal 2022 -n $number -m --color=never)
@@ -200,19 +189,14 @@ parseArgumentDate() {
     local argRegex="${dateRegex}( +[a-zA-Z]+) *"
     local oneWordRegex="(^ +[^ ]+$)|(^[^ ]+$)|(^[^ ]+ +$)|(^ +[^ ]+ +$)"
 
-    echo "- parseArgumentDate()"
-
     local arg="$1"
     
     # If arg matches regex "mm/xx color"
     if [[ $arg =~ $argRegex ]]; then
-	echo "- $arg Matches regex [mm/xx color]"
 	local argColor=$(echo "$arg" | awk '{ print $2 }')
 
 	# Check if arg has a valid color
 	if isColor "$argColor"; then
-	    echo "- $argColor is a valid color"
-	    echo "- adding [$arg] to targetDates"
 	    targetDates+=("$arg")
 	else
 	    argErr "c" "$argColor"
@@ -220,10 +204,8 @@ parseArgumentDate() {
 
     elif [[ $arg =~ $oneWordRegex ]]; then
 	# Check if arg has only 1 word
-	echo "- [$arg] is one word"
 	argErr "c" "$arg"
     else
-	echo "- [$arg] DOESN'T match regex [mm/xx color]"
 	argErr "a" "$arg"
     fi
 }
@@ -231,25 +213,15 @@ parseArgumentDate() {
 parseInputFile() {
     local fileColor="$defaultColor";
     local inputFile="$1"
-    echo "- Checking if [$1] is a valid file"
     ! isFile "$1" && argErr "f" "$inputFile"
-    echo -e "\n----------------------------\n"
 
     if isSet "$2"; then
 	if isColor "$2"; then
-	   echo "- [$2] is a valid color after input_file"
            fileColor="$2"  # || argErr "c" "$2"
-	   echo "- [$2] added to [\$fileColor]"
-           echo -e "\n----------------------------\n"
-	   
 	else
-	   echo "- [$2] is an argument"
 	   parseArgumentDate "$2"
 	fi
     fi
-
-    echo "- Now is parsing all file dates and adding default color or given color"
-    echo "- [\$targetDates=(${targetDates[@]})]"
 
     ! [[ -f $inputFile ]] && argErr "f" "$inputFile"
 
@@ -257,8 +229,6 @@ parseInputFile() {
 
     
     readarray -t -O "${#targetDates[@]}" targetDates <<< "$fileDates"
-
-    echo "- [\$targetDates=(${targetDates[@]})]"
 
     return 0
 }
@@ -293,12 +263,14 @@ argErr() {
     printf "${RED}ERROR${NC}: "
 
     case "$errCode" in
-	a)     echo -e "\`$errStr\` Invalid date argument\n $datesExample"      ;;
-	u)     echo -e "\`$errStr\` Unexpected argument\n $datesExample"        ;;
-	c)     echo -e "\`$errStr\` Is not a supported color.\n $listColors"    ;;
-	f)     echo -e "\`$errStr\` Is not a valid file" && grep="--input-file" ;;
-	i)     echo -e "Expected input file."       && grep="--input-file"      ;;
-	n)     echo -e "Expected a range of months" && grep="--months"          ;;
+	a) echo -e "\`$errStr\` Invalid date argument\n $datesExample"       ;;
+	u) echo -e "\`$errStr\` Unexpected argument\n $datesExample"         ;;
+	c) echo -e "\`$errStr\` Is not a supported color\n $listColors"      ;;
+	f) echo -e "\`$errStr\` Is not a valid file"  && grep="--input-file" ;;
+	x) echo -e "\`$errStr\` is not a number"      && grep="--months"     ;;
+	m) echo -e "\`$errStr\` is not between 1-3"   && grep="--months"     ;;
+	n) echo -e "Expected a range of months"       && grep="--months"     ;;
+	i) echo -e "Expected input file"              && grep="--input-file" ;;
     esac
 
     ! [[ -z "${grep+x}" ]] &&
