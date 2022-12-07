@@ -1,7 +1,5 @@
 #!/bin/bash
 
-# TODO: Replace all echos with printfs
-
 set -u
 set -e
 
@@ -19,11 +17,11 @@ declare -r defaultColor="red"
 
 
 # Miscellanous variables
-RED='\033[0;31m'
-YEL='\033[0;33m'
-NC='\033[0m'
+declare RED='\033[0;31m'
+declare YEL='\033[0;33m'
+declare NC='\033[0m'
 
-usage="\
+declare usage="\
 ${RED}Usage${NC}:
   ./$(basename "$0") [option...] [dates...]
 
@@ -32,16 +30,16 @@ ${RED}Options${NC}:
    -i, --input-file   take DATE PATTERNS from file and highlight them on calendar
    -l, --list-colors  print list of available colors for highlighting"
 
-datesExample="\
+declare datesExample="\
    Example: ./$(basename "$0") ${YEL}\"dd/mm color\"${NC}"
 
-listColors="\
+declare listColors="\
 ${RED}List of colors${NC}:
     black, white, gray, silver, lime
     red, purple, green, maroon, yellow
     olive, navy, blue, teal, aqua."
 
-moreInfo="
+declare moreInfo="
 Try \`$(basename "$0") -h\` for more information."
 
 colorize() {
@@ -77,7 +75,7 @@ parseTargetDay() {
 
     
     for (( i = 0; i < ${#targetDatesTemp[@]}; i++)); do
-	formatDates+=($(printf "0000${targetDatesTemp[$i]}" | sed 's/ //g'))
+	formatDates+=($(printf "0000%s" "${targetDatesTemp[$i]}" | sed 's/ //g'))
     done
 
     # '00001115 = November 15 0000'
@@ -162,14 +160,14 @@ formatOutput() {
 	    ! [[ "${line: -1}" == '>' ]] && (( "${#line}" > 20 )) && (( $monthRange > 1 )) &&line="${line::-1}"
 
 	    if [ $((k+1)) == ${#months[@]} ]; then
-		outputDays="$(printf "$outputDays$line\n" )"
+		outputDays="$(printf "%s%s\n" "$outputDays" "$line")"
 		continue
 	    fi
-	    outputDays="$(printf "$outputDays$line$whitespaceSeparator\n" )"
+	    outputDays="$(printf "%s%s%s\n" "$outputDays" "$line" "$whitespaceSeparator")"
 	done
 	outputDays="$outputDays\n"
     done
-    output=$(printf "${outputMonths}\n\n${outputWeek}\n${outputDays}\n")
+    output=$(printf "%s\n\n%s\n%s\n" "$outputMonths" "${outputWeek}" "${outputDays}")
 }
 
 
@@ -259,25 +257,26 @@ isFile() {
 
 argErr() {
     errCode="$1"
-    errStr=$(printf "$2" | xargs)
+    errStr=$(printf "%s" "$2" | xargs)
 
     printf "${RED}ERROR${NC}: "
 
     case "$errCode" in
-	a) printf "\`$errStr\` Invalid date argument\n $datesExample\n"       ;;
-	u) printf "\`$errStr\` Unexpected argument\n $datesExample\n"         ;;
-	c) printf "\`$errStr\` Is not a supported color\n $listColors\n"      ;;
-	f) printf "\`$errStr\` Is not a valid file\n"  && grep="--input-file" ;;
-	x) printf "\`$errStr\` is not a number\n"      && grep="--months"     ;;
-	m) printf "\`$errStr\` is not between 1-3\n"   && grep="--months"     ;;
-	n) printf "Expected a range of months\n"       && grep="--months"     ;;
-	i) printf "Expected input file\n"              && grep="--input-file" ;;
+	u) printf "\`%s\` Unexpected argument\n"                      "$errStr"   ;;
+	a) printf "\`%s\` Invalid date argument\n $datesExample\n"    "$errStr"   ;;
+	c) printf "\`%s\` Is not a supported color\n $listColors\n\n" "$errStr"   ;;
+	f) printf "\`%s\` Is not a valid file\n" "$errStr" && grep="--input-file" ;;
+	x) printf "\`%s\` is not a number\n"     "$errStr" && grep="--months"     ;;
+	m) printf "\`%s\` is not between 1-3\n"  "$errStr" && grep="--months"     ;;
+	n) printf "Expected a range of months\n"           && grep="--months"     ;;
+	i) printf "Expected input file\n"                  && grep="--input-file" ;;
     esac
 
-    ! [[ -z "${grep+x}" ]] &&
-       printf "$usage" | grep -E "Usage|$grep" | awk '{print "   "$0}'
+    set +u
+    isSet "grep" && printf "$usage" | grep -E "Usage|$grep" | awk '{print "   "$0}'
+    set -u
 
-    printf "$moreInfo\n"
+    printf "%s\n" "$moreInfo"
 
     exit 1
 }
@@ -288,14 +287,14 @@ formatCalendar "$calendar"
 # Parse arguments
 set +u
 while [[ "$#" -gt 0 ]]; do
-    if ! [[ -z "$@" ]]; then
+    if isSet "$@"; then
 	if [[ $1 == "-h" || $1 == "--help" ]]; then
 	    printf "Notify calendar and day reminder\n\n$usage\n" && exit 0
 	elif [[ $1 == "-n" || $1 == "--months" ]]; then
 	    ! isSet "$2" && argErr "n" || parseMonthRange "$2" && shift
 
 	elif [[ $1 == "-l" || $1 == "--list-colors" ]]; then
-	    printf "$listColors\n" && exit 0
+	    printf "%s\n" "$listColors" && exit 0
 
 	elif [[ "$1" == "-i" || $1 == "--input-file" ]]; then
 	    if isSet "$2"; then
@@ -309,8 +308,6 @@ while [[ "$#" -gt 0 ]]; do
 	    else
 		argErr "i" "$2"
 	    fi
-
-	    # TODO: Positional arguments
 	    shift
 	    
 	elif [[ $1 =~ ${dateRegex} ]]; then
